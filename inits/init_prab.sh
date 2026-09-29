@@ -36,7 +36,20 @@ ip link set eth0 up
 ip addr replace 10.70.1.2/24 dev eth0
 ip route replace default via 10.70.1.1
 
-# 5. DNS master (soal 4)
+# 5. curl
+if ! command -v curl >/dev/null 2>&1; then
+    log "installing curl (menunggu koneksi internet untuk apt) ..."
+    W=0
+    until ping -c1 -W2 8.8.8.8 >/dev/null 2>&1 || [ $W -ge 24 ]; do
+        sleep 5
+        W=$((W+1))
+    done
+    apt-get update -qq
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl
+fi
+log "curl siap: $(command -v curl)"
+
+# 6. DNS master (soal 4)
 if ! command -v named >/dev/null 2>&1; then
     log "installing bind9 (menunggu koneksi internet untuk apt) ..."
     W=0
@@ -63,6 +76,28 @@ zone "k13.com" {
     also-notify { 10.70.1.3; };
     allow-transfer { 10.70.1.3; };
 };
+
+zone "1.70.10.in-addr.arpa" {
+    type master;
+    file "/etc/bind/db.1.70.10";
+    notify yes;
+    also-notify { 10.70.1.3; };
+    allow-transfer { 10.70.1.3; };
+};
+zone "4.70.10.in-addr.arpa" {
+    type master;
+    file "/etc/bind/db.4.70.10";
+    notify yes;
+    also-notify { 10.70.1.3; };
+    allow-transfer { 10.70.1.3; };
+};
+zone "5.70.10.in-addr.arpa" {
+    type master;
+    file "/etc/bind/db.5.70.10";
+    notify yes;
+    also-notify { 10.70.1.3; };
+    allow-transfer { 10.70.1.3; };
+};
 CONF
 SERIAL="$(date +%y%m%d%H%M)"
 cat > /etc/bind/db.k13.com <<ZONE
@@ -78,7 +113,7 @@ cat > /etc/bind/db.k13.com <<ZONE
 prab     IN A 10.70.1.2
 tedd     IN A 10.70.1.3
 @        IN A 10.70.5.2
-rootkit  IN A 10.70.1.1 ; soal 5: domain per-node (prab/tedd dikecualikan, sudah ada)
+rootkit  IN A 10.70.1.1
 alpha    IN A 10.70.2.2
 beta     IN A 10.70.2.3
 gamma    IN A 10.70.2.4
@@ -90,6 +125,43 @@ obladi   IN A 10.70.1.4
 desmond  IN A 10.70.1.5
 oblada   IN A 10.70.1.6
 molly    IN A 10.70.1.7
+vault    IN A 10.70.1.4 ; soal 7: round-robin area vault
+vault    IN A 10.70.1.5
+core     IN A 10.70.1.6 ; soal 7: round-robin area core
+core     IN A 10.70.1.7
+www      IN CNAME penny.k13.com. ; soal 7
+static   IN CNAME abbey.k13.com.
+ZONE
+# 6. reverse zone (soal 8)
+cat > /etc/bind/db.1.70.10 <<ZONE
+\$TTL 300
+@   IN SOA prab.k13.com. admin.k13.com. (
+        $SERIAL
+        3600 300 604800 300 )
+    IN NS  prab.k13.com.
+    IN NS  tedd.k13.com.
+4     IN PTR vault.k13.com.
+5     IN PTR vault.k13.com.
+6     IN PTR core.k13.com.
+7     IN PTR core.k13.com.
+ZONE
+cat > /etc/bind/db.4.70.10 <<ZONE
+\$TTL 300
+@   IN SOA prab.k13.com. admin.k13.com. (
+        $SERIAL
+        3600 300 604800 300 )
+    IN NS  prab.k13.com.
+    IN NS  tedd.k13.com.
+2     IN PTR abbey.k13.com.
+ZONE
+cat > /etc/bind/db.5.70.10 <<ZONE
+\$TTL 300
+@   IN SOA prab.k13.com. admin.k13.com. (
+        $SERIAL
+        3600 300 604800 300 )
+    IN NS  prab.k13.com.
+    IN NS  tedd.k13.com.
+2     IN PTR penny.k13.com.
 ZONE
 pkill named 2>/dev/null || true
 mkdir -p /run/named && chown bind:bind /run/named
@@ -98,6 +170,8 @@ named -u bind
 sleep 2
 SER="$(dig @127.0.0.1 k13.com SOA +short 2>/dev/null | awk '{print $3}')"
 log "bind9 master aktif - serial zona: ${SER:-TIDAK JALAN}"
+PTR="$(dig @127.0.0.1 -x 10.70.1.4 +short 2>/dev/null | head -1)"
+log "reverse zone: 10.70.1.4 => ${PTR:-TIDAK ADA}"
 
 # verify
 log "ip addr:"

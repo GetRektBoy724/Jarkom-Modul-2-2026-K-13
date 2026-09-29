@@ -36,7 +36,20 @@ ip link set eth0 up
 ip addr replace 10.70.1.3/24 dev eth0
 ip route replace default via 10.70.1.1
 
-# 5. DNS slave (soal 4)
+# 5. curl
+if ! command -v curl >/dev/null 2>&1; then
+    log "installing curl (menunggu koneksi internet untuk apt) ..."
+    W=0
+    until ping -c1 -W2 8.8.8.8 >/dev/null 2>&1 || [ $W -ge 24 ]; do
+        sleep 5
+        W=$((W+1))
+    done
+    apt-get update -qq
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl
+fi
+log "curl siap: $(command -v curl)"
+
+# 6. DNS slave (soal 4)
 if ! command -v named >/dev/null 2>&1; then
     log "installing bind9 (menunggu koneksi internet untuk apt) ..."
     W=0
@@ -61,23 +74,47 @@ zone "k13.com" {
     masters { 10.70.1.2; };
     file "/var/cache/bind/db.k13.com";
 };
+zone "1.70.10.in-addr.arpa" {
+    type slave;
+    masters { 10.70.1.2; };
+    file "/var/cache/bind/db.1.70.10";
+};
+zone "4.70.10.in-addr.arpa" {
+    type slave;
+    masters { 10.70.1.2; };
+    file "/var/cache/bind/db.4.70.10";
+};
+zone "5.70.10.in-addr.arpa" {
+    type slave;
+    masters { 10.70.1.2; };
+    file "/var/cache/bind/db.5.70.10";
+};
 CONF
 pkill named 2>/dev/null || true
-rm -f /var/cache/bind/db.k13.com*
+rm -f /var/cache/bind/db.k13.com* /var/cache/bind/db.1.70.10*       /var/cache/bind/db.4.70.10* /var/cache/bind/db.5.70.10*
 mkdir -p /run/named && chown bind:bind /run/named
 sleep 1
 named -u bind
 N=0
-SER=""
-while [ $N -lt 15 ]; do
-    SER="$(dig @127.0.0.1 k13.com SOA +short 2>/dev/null | awk '{print $3}')"
-    if [ -n "$SER" ]; then
+UP=0
+while [ $N -lt 25 ]; do
+    UP=1
+    for ZN in k13.com 1.70.10.in-addr.arpa 4.70.10.in-addr.arpa 5.70.10.in-addr.arpa; do
+        SER="$(dig @127.0.0.1 "$ZN" SOA +short 2>/dev/null | awk '{print $3}')"
+        if [ -z "$SER" ]; then
+            UP=0
+        fi
+    done
+    if [ "$UP" -eq 1 ]; then
         break
     fi
     N=$((N+1))
     sleep 2
 done
-log "bind9 slave aktif - serial zona dari master: ${SER:-BELUM TRANSFER}"
+SER="$(dig @127.0.0.1 k13.com SOA +short 2>/dev/null | awk '{print $3}')"
+log "bind9 slave aktif - serial zona: ${SER:-BELUM TRANSFER}"
+PTR="$(dig @127.0.0.1 -x 10.70.1.4 +short 2>/dev/null | head -1)"
+log "reverse zone: 10.70.1.4 => ${PTR:-TIDAK ADA}"
 
 # verify
 log "ip addr:"

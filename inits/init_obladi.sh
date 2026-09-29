@@ -36,6 +36,57 @@ ip link set eth0 up
 ip addr replace 10.70.1.4/24 dev eth0
 ip route replace default via 10.70.1.1
 
+# 5. curl
+if ! command -v curl >/dev/null 2>&1; then
+    log "installing curl (menunggu koneksi internet untuk apt) ..."
+    W=0
+    until ping -c1 -W2 8.8.8.8 >/dev/null 2>&1 || [ $W -ge 24 ]; do
+        sleep 5
+        W=$((W+1))
+    done
+    apt-get update -qq
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl
+fi
+log "curl siap: $(command -v curl)"
+
+# 6. web statis apache (soal 9)
+if ! command -v apache2 >/dev/null 2>&1; then
+    log "installing apache2 (menunggu koneksi internet untuk apt) ..."
+    W=0
+    until ping -c1 -W2 8.8.8.8 >/dev/null 2>&1 || [ $W -ge 24 ]; do
+        sleep 5
+        W=$((W+1))
+    done
+    apt-get update -qq
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq apache2
+fi
+mkdir -p /var/www/html/arsip
+for F in dokumen-1.txt dokumen-2.txt dokumen-3.txt; do
+    if [ ! -f /var/www/html/arsip/$F ]; then
+        echo "dokumen sindikat: $F" > /var/www/html/arsip/$F
+    fi
+done
+cat > /etc/apache2/conf-available/autoindex-arsip.conf <<'CONF'
+ServerName obladi.k13.com
+
+<Directory /var/www/html/arsip>
+    Options +Indexes
+    AllowOverride None
+    Require all granted
+</Directory>
+CONF
+a2enconf autoindex-arsip >/dev/null 2>&1 || true
+a2enmod autoindex >/dev/null 2>&1 || true
+apache2ctl configtest >/dev/null 2>&1 || true
+apache2ctl stop >/dev/null 2>&1 || true
+apache2ctl start
+N=0
+until pidof apache2 >/dev/null 2>&1 || [ $N -ge 10 ]; do
+    sleep 1
+    N=$((N+1))
+done
+PID="$(pidof apache2 || echo TIDAK JALAN)"
+log "apache2 aktif - pid: $PID"
 
 # verify
 log "ip addr:"
