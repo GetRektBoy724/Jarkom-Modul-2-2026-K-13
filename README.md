@@ -859,6 +859,130 @@ Verifikasi otomatis (kode lengkap pada `assets/verify_soal12.py`) memeriksa semu
 ![verifikasi soal12](assets/soal12-verifikasi.png)
 
 
+## Soal 13 
+Akses lewat IP atau domain penny di-redirect permanen (301) ke www.k13.com. Akses lewat IP atau domain abbey di-redirect sementara (302) ke static.k13.com. www dan static sendiri tidak boleh ikut ter-redirect.
+### Konfigurasi
+
+Penny memakai Apache. Vhost redirect penny-redirect.conf dipasang di samping gate-proxy.conf. Apache memilih vhost dari ServerName dan ServerAlias, sehingga www.k13.com tetap dilayani gate-proxy.
+
+
+
+### Verifikasi
+
+
+![verifikasi soal13](assets/soal13abbey-verifikasi.png)
+
+
+![verifikasi soal13](assets/soal13penny-verifikasi.png)
+
+
+## Soal 14 
+Access log setiap server web di area vault dan core harus mencatat IP asli client yang diteruskan gerbang, bukan IP penny atau abbey.
+
+## Konfigurasi 
+
+Agar access log backend mencatat IP asli client, gerbang meneruskan IP asli lewat header `X-Forwarded-For`, dan backend hanya memercayai header itu bila datang dari IP gerbang (supaya tidak bisa dipalsukan client).
+Penny tidak perlu diubah karena ProxyPass pada Apache sudah menambahkan `X-Forwarded-For otomatis`. Pada abbey ditambahkan satu baris pada location / di `core-proxy` (juga di heredoc `init_abbey.sh`)
+sh
+`proxy_set_header` `X-Forwarded-For` `$proxy_add_x_forwarded_for;`
+
+![verifikasi soal14](image-7.png) //obladi
+![alt text](image-8.png) // alpha
+
+
+## Verifikasi 
+![verifikasi soal14](assets/soal14desmond-verifikasi.png)
+![verifikasi soal14](assets/soal14alpha-verifikasi.png)
+![verifikasi soal14](assets/soal14obladi-verifikasi.png)
+
+## Soal 15 
+Rootkit menginstruksikan pembuatan jalur proxy khusus yang berdiri sendiri. Di penny buat reverse proxy untuk path `/eternal` yang menyajikan `/var/www/eternal` dan dapat mengeksekusi PHP. Di abbey buat jalur `/orion` yang menyajikan `/var/www/orion` secara statis tanpa rendering PHP.
+
+## Konfigurasi 
+`/eternal` dikecualikan dari balancer vault (`ProxyPass /eternal !`) dan dilayani langsung oleh penny dengan `mod_php`. `/orion` dilayani langsung oleh abbey dengan alias, tanpa handler PHP, sehingga file .php hanya terkirim sebagai teks.
+
+## Verifikasi 
+
+
+
+## Soal 16 
+Dari satu klien (alpha), jalankan stress test ApacheBench 250 request dengan konkurensi 10 ke `www.k13.com` dan `static.k13.com`
+
+## Konfigurasi 
+
+Tidak ada konfigurasi server. Alpha hanya membutuhkan ab (paket apache2-utils) dan dig, yang dipasang otomatis lewat `init_alpha.sh`:
+
+`command -v ab >/dev/null 2>&1 || (apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq apache2-utils)`
+
+`command -v dig >/dev/null 2>&1 || (apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq bind9-dnsutils)`
+
+## Verifikasi 
+Jalankan saat abbey berada di `10.70.4.2`, karena `static.k13.com` adalah `CNAME` ke abbey. Catatan untuk laporan: Failed requests pada `static.k13.com` bertipe Length, bukan error koneksi. Dua core (oblada dan molly) memberi halaman dengan panjang berbeda, dan ab menghitung selisih panjang sebagai gagal. Opsi -l menerima panjang yang bervariasi.
+
+![verifikasi soal15](image-9.png) // yang kedua 
+![verifikasi soal15](image-10.png) //yang pertama
+
+
+## Soal 17
+Tambahkan TXT record pada DNS untuk semua klien (alpha, beta, gamma, delta, epsilon). Query TXT ke nama domain mereka mengembalikan hostname masing-masing.
+
+## Konfigurasi 
+Lima baris TXT ditambahkan di dalam heredoc zona db.k13.com pada `init_prab.sh`, tepat di bawah A record epsilon. Serial tidak diubah manual karena dihitung otomatis dari date ($SERIAL), sehingga tedd ikut menarik zona baru.
+
+`alpha    IN TXT "alpha"`
+`beta     IN TXT "beta"`
+`gamma    IN TXT "gamma"`
+`delta    IN TXT "delta"`
+`epsilon  IN TXT "epsilon"`
+
+## Verifikasi 
+
+
+![verifikasi soal17](image-11.png) //prab
+![verifikasi soal17](image-12.png) //alpha
+
+
+## Soal 18
+Ubah A record `abbey.k13.com` ke IP fiktif acak yang valid. Naikkan serial SOA di prab dan pastikan tedd tersinkron. Set TTL 15 detik. Verifikasi tiga fase: sebelum perubahan (IP lama), baru berubah dalam 15 detik (masih IP lama karena cache), setelah TTL habis (IP baru).
+
+## Konfigurasi 
+TTL 15 dipasang permanen di heredoc zona `init_prab.sh`:
+`abbey 15 IN A 10.70.4.2`
+Prab dan tedd menjawab langsung dari zona tanpa cache, jadi fase 2 diperagakan memakai resolver cache dnsmasq di alpha (port 5353) yang meneruskan ke prab. Ini pendekatan pembuktian, bukan konfigurasi layanan produksi.
+
+## Verifikasi 
+![verifikasi soal18](image-13.png) //dig
+![alt text](image-15.png)// dig
+![alt text](image-14.png) //bash 
+
+
+
+## Soal 19 
+Buat CNAME `outbound.k13.com` menuju domain eksternal `http.badssl.com`. Jalankan curl ke `http://outbound.k13.com` dan pastikan output sesuai isi halaman `http.badssl.com`.
+
+## Konfigurasi 
+Satu baris CNAME di heredoc zona `init_prab.sh`, tepat di bawah baris static. Titik di akhir nama wajib agar bind tidak menambahkan `.k13.com`:
+`outbound IN CNAME http.badssl.com`
+
+Prab me-resolve nama eksternal lewat forwarder `192.168.122.1.`
+
+## Verifikasi 
+Catatan untuk laporan: CNAME hanya mengarahkan IP tujuan. Server badssl memilih halaman berdasarkan header Host, sehingga curl polos ke `outbound.k13.com` menampilkan halaman default nginx. Karena itu header Host: http.badssl.com diberikan eksplisit, dan isinya sama persis (diff mencetak SAMA).
+
+![alt text](image-16.png)
+![alt text](image-17.png)
+![alt text](image-18.png)
+
+
+## Soal 20 
+Setelah semua selesai, pastikan semua service dan konfigurasi yang dikerjakan tetap berjalan normal dan autostart saat node di-restart. Khusus kasus ini, abaikan konfigurasi nomor 18 dan biarkan koordinat kembali normal.
+
+## Konfigurasi 
+Tidak ada konfigurasi baru. Autostart dipenuhi karena semua konfigurasi nomor 13 sampai 19 berada di `/root/init.sh` tiap node, yang dijalankan otomatis oleh debinet saat boot (Soal 1). Untuk bagian "koordinat kembali normal", record abbey dikembalikan ke `10.70.4.2` (`bash /root/soal18.sh reset`).
+
+## Verifikasi 
+Di GNS3, Stop lalu Start node (NAT dan rootkit dulu, lalu prab dan tedd, backend, abbey dan penny, alpha). Tunggu log [init:...] selesai tanpa mengetik apa pun.
+
 
 
 
