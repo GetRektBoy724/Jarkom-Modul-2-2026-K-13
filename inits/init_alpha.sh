@@ -58,3 +58,21 @@ ip route show | grep -E 'default|^10\.70\.' || true
 log "resolver:"
 cat /etc/resolv.conf
 log "done."
+
+command -v ab >/dev/null 2>&1 || (apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq apache2-utils)
+command -v dig >/dev/null 2>&1 || (apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq bind9-dnsutils)
+command -v dnsmasq >/dev/null 2>&1 || (apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq dnsmasq-base)
+cat > /root/fase18.sh <<'SH18'
+#!/bin/bash
+pkill dnsmasq 2>/dev/null; sleep 2
+dnsmasq --conf-file=/dev/null --user=root --port=5353 --listen-address=127.0.0.1 --bind-interfaces --no-resolv --server=/k13.com/10.70.1.2 --cache-size=500 --pid-file=/tmp/dnsmasq18.pid
+sleep 1
+echo "Klien: alpha $(hostname -I)"
+for i in $(seq 1 20); do
+  C=$(dig @127.0.0.1 -p 5353 abbey.k13.com +noall +answer | awk '{print $2" "$5}')
+  P=$(dig @10.70.1.2 abbey.k13.com +short)
+  echo "$(date +%T)  cache(ttl ip): $C   |   prab langsung: $P"
+  sleep 2
+done
+SH18
+chmod +x /root/fase18.sh

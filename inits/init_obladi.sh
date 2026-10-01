@@ -66,6 +66,9 @@ for F in dokumen-1.txt dokumen-2.txt dokumen-3.txt; do
         echo "dokumen sindikat: $F" > /var/www/html/arsip/$F
     fi
 done
+if [ ! -f /var/www/html/arsip/backend-obladi.txt ]; then
+    echo "backend: obladi" > /var/www/html/arsip/backend-obladi.txt
+fi
 cat > /etc/apache2/conf-available/autoindex-arsip.conf <<'CONF'
 ServerName obladi.k13.com
 
@@ -96,3 +99,9 @@ ip route show | grep -E 'default|^10\.70\.' || true
 log "resolver:"
 cat /etc/resolv.conf
 log "done."
+a2enmod remoteip >/dev/null
+echo "RemoteIPHeader X-Forwarded-For" > /etc/apache2/conf-available/remoteip.conf
+echo "RemoteIPInternalProxy 10.70.5.2" >> /etc/apache2/conf-available/remoteip.conf
+echo "RemoteIPInternalProxy 10.70.4.2" >> /etc/apache2/conf-available/remoteip.conf
+a2enconf remoteip >/dev/null
+service apache2 restart

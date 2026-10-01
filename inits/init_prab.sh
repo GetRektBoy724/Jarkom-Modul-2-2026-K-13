@@ -119,7 +119,12 @@ beta     IN A 10.70.2.3
 gamma    IN A 10.70.2.4
 delta    IN A 10.70.3.2
 epsilon  IN A 10.70.3.3
-abbey    IN A 10.70.4.2
+epsilon IN TXT "epsilon"
+delta IN TXT "delta"
+gamma IN TXT "gamma"
+beta IN TXT "beta"
+alpha IN TXT "alpha"
+abbey 15 IN A 10.70.4.2
 penny    IN A 10.70.5.2
 obladi   IN A 10.70.1.4
 desmond  IN A 10.70.1.5
@@ -131,6 +136,7 @@ core     IN A 10.70.1.6 ; soal 7: round-robin area core
 core     IN A 10.70.1.7
 www      IN CNAME penny.k13.com. ; soal 7
 static   IN CNAME abbey.k13.com.
+outbound IN CNAME http.badssl.com.
 ZONE
 # 6. reverse zone (soal 8)
 cat > /etc/bind/db.1.70.10 <<ZONE
@@ -181,3 +187,4 @@ ip route show | grep -E 'default|^10\.70\.' || true
 log "resolver:"
 cat /etc/resolv.conf
 log "done."
+command -v dnsmasq >/dev/null 2>&1 || (apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq dnsmasq-base)
