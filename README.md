@@ -865,6 +865,7 @@ Akses lewat IP atau domain penny di-redirect permanen (301) ke www.k13.com. Akse
 
 Penny memakai Apache. Vhost redirect penny-redirect.conf dipasang di samping gate-proxy.conf. Apache memilih vhost dari ServerName dan ServerAlias, sehingga www.k13.com tetap dilayani gate-proxy.
 
+<<<<<<< HEAD
 
 
 ### Verifikasi
@@ -874,6 +875,48 @@ Penny memakai Apache. Vhost redirect penny-redirect.conf dipasang di samping gat
 
 
 ![verifikasi soal13](assets/soal13penny-verifikasi.png)
+=======
+`cat /etc/apache2/sites-available/penny-redirect.conf`
+<VirtualHost *:80>
+    ServerName penny.k13.com
+    ServerAlias 10.70.5.2
+    Redirect permanent / http://www.k13.com/
+</VirtualHost>
+
+`apache2ctl -S`
+VirtualHost configuration:
+*:80                   is a NameVirtualHost
+         default server www.k13.com (/etc/apache2/sites-enabled/gate-proxy.conf:1)
+         port 80 namevhost www.k13.com (/etc/apache2/sites-enabled/gate-proxy.conf:1)
+         port 80 namevhost penny.k13.com (/etc/apache2/sites-enabled/penny-redirect.conf:1)
+                 alias 10.70.5.2
+ServerRoot: "/etc/apache2"
+Main DocumentRoot: "/var/www/html"
+Main ErrorLog: "/var/log/apache2/error.log"
+Mutex mpm-accept: using_defaults
+Mutex watchdog-callback: using_defaults
+Mutex proxy-balancer-shm: using_defaults
+Mutex proxy: using_defaults
+Mutex default: dir="/var/run/apache2/" mechanism=default 
+PidFile: "/var/run/apache2/apache2.pid"
+Define: DUMP_VHOSTS
+Define: DUMP_RUN_CFG
+User: name="www-data" id=33
+Group: name="www-data" id=33
+
+`cat /etc/nginx/sites-available/redirect`
+server {
+    listen 80;
+    server_name 10.70.4.2 abbey.k13.com;
+    return 302 `http://static.k13.com$request_uri`;
+}
+
+
+### Verifikasi
+![verifikasi soal13](assets/soal13penny-verifikasi.png)
+![verifikasi soal13](assets/soal13abbey-verifikasi.png)
+![verifikasi soal13](assets/soal13alpha-verifikasi.png)
+>>>>>>> d8c5deb (revisi)
 
 
 ## Soal 14 
@@ -883,6 +926,7 @@ Access log setiap server web di area vault dan core harus mencatat IP asli clien
 
 Agar access log backend mencatat IP asli client, gerbang meneruskan IP asli lewat header `X-Forwarded-For`, dan backend hanya memercayai header itu bila datang dari IP gerbang (supaya tidak bisa dipalsukan client).
 Penny tidak perlu diubah karena ProxyPass pada Apache sudah menambahkan `X-Forwarded-For otomatis`. Pada abbey ditambahkan satu baris pada location / di `core-proxy` (juga di heredoc `init_abbey.sh`)
+<<<<<<< HEAD
 sh
 `proxy_set_header` `X-Forwarded-For` `$proxy_add_x_forwarded_for;`
 
@@ -894,6 +938,35 @@ sh
 ![verifikasi soal14](assets/soal14desmond-verifikasi.png)
 ![verifikasi soal14](assets/soal14alpha-verifikasi.png)
 ![verifikasi soal14](assets/soal14obladi-verifikasi.png)
+=======
+abbey
+`grep -n "X-Forwarded-For" /etc/nginx/sites-available/core-proxy`
+sh
+`proxy_set_header` `X-Forwarded-For` `$proxy_add_x_forwarded_for;`
+obladi dan desmond
+`a2enmod remoteip`
+`echo "RemoteIPHeader X-Forwarded-For" > /etc/apache2/conf-available/remoteip.conf`
+`echo "RemoteIPInternalProxy 10.70.5.2" >> /etc/apache2/conf-available/remoteip.conf`
+`echo "RemoteIPInternalProxy 10.70.4.2" >> /etc/apache2/conf-available/remoteip.conf`
+`a2enconf remoteip`
+`apache2ctl configtest`
+`service apache2 restart`
+oblada dan molly 
+`echo "set_real_ip_from 10.70.4.2;" > /etc/nginx/conf.d/realip.conf`
+`echo "real_ip_header X-Forwarded-For;" >> /etc/nginx/conf.d/realip.conf`
+`nginx -t`
+`nginx -s reload`
+
+
+
+
+## Verifikasi 
+![alt text](assets/soal14desmond-verifikasi.png)
+![alt text](assets/soal14obladi-verifikasi.png)
+![alt text](assets/soal14oblada-verifikasi.png)
+![verifikasi soal14](assets/soal14molly-verifikasi.png)
+
+>>>>>>> d8c5deb (revisi)
 
 ## Soal 15 
 Rootkit menginstruksikan pembuatan jalur proxy khusus yang berdiri sendiri. Di penny buat reverse proxy untuk path `/eternal` yang menyajikan `/var/www/eternal` dan dapat mengeksekusi PHP. Di abbey buat jalur `/orion` yang menyajikan `/var/www/orion` secara statis tanpa rendering PHP.
@@ -901,7 +974,41 @@ Rootkit menginstruksikan pembuatan jalur proxy khusus yang berdiri sendiri. Di p
 ## Konfigurasi 
 `/eternal` dikecualikan dari balancer vault (`ProxyPass /eternal !`) dan dilayani langsung oleh penny dengan `mod_php`. `/orion` dilayani langsung oleh abbey dengan alias, tanpa handler PHP, sehingga file .php hanya terkirim sebagai teks.
 
+<<<<<<< HEAD
 ## Verifikasi 
+=======
+penny
+`apt install libapache2-mod-php -y`
+`mkdir -p /var/www/eternal`
+`echo '<?php echo "Eternal PHP aktif, versi " . phpversion(); ?>' > /var/www/eternal/index.php`
+`chown -R www-data:www-data /var/www/eternal`
+`echo 'ProxyPass /eternal !' > /etc/apache2/eternal-path.conf`
+`echo 'Alias /eternal /var/www/eternal' >> /etc/apache2/eternal-path.conf`
+`echo '<Directory /var/www/eternal>' >> /etc/apache2/eternal-path.conf`
+`echo '    DirectoryIndex index.php index.html' >> /etc/apache2/eternal-path.conf`
+`echo '    Options -Indexes' >> /etc/apache2/eternal-path.conf`
+`echo '    AllowOverride None' >> /etc/apache2/eternal-path.conf`
+`echo '    Require all granted' >> /etc/apache2/eternal-path.conf`
+`echo '</Directory>' >> /etc/apache2/eternal-path.conf`
+`grep -c "eternal-path" /etc/apache2/sites-available/gate-proxy.conf`
+
+abbey 
+`mkdir -p /var/www/orion`
+`echo '<h1>Orion statis</h1>' > /var/www/orion/index.html`
+`echo '<?php echo "PHP dijalankan"; ?>' > /var/www/orion/tes.php`
+`chmod -R 755 /var/www/orion`
+`echo 'location /orion {' > /etc/nginx/orion-location.conf`
+`echo '    alias /var/www/orion;' >> /etc/nginx/orion-location.conf`
+`echo '    index index.html;' >> /etc/nginx/orion-location.conf`
+`echo '}' >> /etc/nginx/orion-location.conf`
+`grep -c "orion-location" /etc/nginx/sites-available/core-proxy`
+
+
+## Verifikasi 
+![verifikasi soal15](assets/soal15penny-verifikasi.png)
+![verifikasi soal15](assets/soal15abbey-verifikasi.png)
+![verifikasi soal15](assets/soal15alpha-verifikasi.png)
+>>>>>>> d8c5deb (revisi)
 
 
 
@@ -909,18 +1016,31 @@ Rootkit menginstruksikan pembuatan jalur proxy khusus yang berdiri sendiri. Di p
 Dari satu klien (alpha), jalankan stress test ApacheBench 250 request dengan konkurensi 10 ke `www.k13.com` dan `static.k13.com`
 
 ## Konfigurasi 
+<<<<<<< HEAD
 
 Tidak ada konfigurasi server. Alpha hanya membutuhkan ab (paket apache2-utils) dan dig, yang dipasang otomatis lewat `init_alpha.sh`:
 
 `command -v ab >/dev/null 2>&1 || (apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq apache2-utils)`
 
 `command -v dig >/dev/null 2>&1 || (apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq bind9-dnsutils)`
+=======
+alpha 
+`apt install apache2-utils -y`
+`ab -V`
+
+`grep -c "apache2-utils" /root/init.sh`
+>>>>>>> d8c5deb (revisi)
 
 ## Verifikasi 
 Jalankan saat abbey berada di `10.70.4.2`, karena `static.k13.com` adalah `CNAME` ke abbey. Catatan untuk laporan: Failed requests pada `static.k13.com` bertipe Length, bukan error koneksi. Dua core (oblada dan molly) memberi halaman dengan panjang berbeda, dan ab menghitung selisih panjang sebagai gagal. Opsi -l menerima panjang yang bervariasi.
 
+<<<<<<< HEAD
 ![verifikasi soal15](image-9.png) // yang kedua 
 ![verifikasi soal15](image-10.png) //yang pertama
+=======
+![verifikasi soal16](assets/soal16k13-verifikasi.png)
+![verifikasi soal16](assets/soal16static-verifikasi.png)
+>>>>>>> d8c5deb (revisi)
 
 
 ## Soal 17
@@ -935,11 +1055,27 @@ Lima baris TXT ditambahkan di dalam heredoc zona db.k13.com pada `init_prab.sh`,
 `delta    IN TXT "delta"`
 `epsilon  IN TXT "epsilon"`
 
+<<<<<<< HEAD
 ## Verifikasi 
 
 
 ![verifikasi soal17](image-11.png) //prab
 ![verifikasi soal17](image-12.png) //alpha
+=======
+
+`SER=$(grep -m1 "; serial" /etc/bind/db.k13.com | awk '{print $1}')`
+`sed -i "s/$SER/$((SER+1))/" /etc/bind/db.k13.com`
+`for h in alpha beta gamma delta epsilon; do echo "$h IN TXT \"$h\"" >> /etc/bind/db.k13.com; done`
+`named-checkzone k13.com /etc/bind/db.k13.com`
+`rndc reload k13.com`
+
+![konfig soal17](assets/soal17prab-konfig.png)
+
+## Verifikasi 
+![alt text](assets/soal17prab-verifikasi.png)
+![alt text](assets/soal17tedd-verifikasi.png)
+![alt text](assets/soal17alpha-verifikasi.png)
+>>>>>>> d8c5deb (revisi)
 
 
 ## Soal 18
@@ -951,10 +1087,14 @@ TTL 15 dipasang permanen di heredoc zona `init_prab.sh`:
 Prab dan tedd menjawab langsung dari zona tanpa cache, jadi fase 2 diperagakan memakai resolver cache dnsmasq di alpha (port 5353) yang meneruskan ke prab. Ini pendekatan pembuktian, bukan konfigurasi layanan produksi.
 
 ## Verifikasi 
+<<<<<<< HEAD
 ![verifikasi soal18](image-13.png) //dig
 ![alt text](image-15.png)// dig
 ![alt text](image-14.png) //bash 
 
+=======
+kosong karena nomor 18 belum bisa menyesuaikan timingnya, namun bisa jalan. 
+>>>>>>> d8c5deb (revisi)
 
 
 ## Soal 19 
@@ -964,14 +1104,29 @@ Buat CNAME `outbound.k13.com` menuju domain eksternal `http.badssl.com`. Jalanka
 Satu baris CNAME di heredoc zona `init_prab.sh`, tepat di bawah baris static. Titik di akhir nama wajib agar bind tidak menambahkan `.k13.com`:
 `outbound IN CNAME http.badssl.com`
 
+<<<<<<< HEAD
 Prab me-resolve nama eksternal lewat forwarder `192.168.122.1.`
+=======
+`SER=$(grep -m1 "; serial" /etc/bind/db.k13.com | awk '{print $1}')`
+`sed -i "s/$SER/$((SER+1))/" /etc/bind/db.k13.com`
+`echo "outbound IN CNAME http.badssl.com." >> /etc/bind/db.k13.com`
+`named-checkzone k13.com /etc/bind/db.k13.com`
+`rndc reload k13.com`
+`Prab me-resolve nama eksternal lewat forwarder 192.168.122.1`
+
+![konfig soal19](assets/soal19-konfig.png)
+>>>>>>> d8c5deb (revisi)
 
 ## Verifikasi 
 Catatan untuk laporan: CNAME hanya mengarahkan IP tujuan. Server badssl memilih halaman berdasarkan header Host, sehingga curl polos ke `outbound.k13.com` menampilkan halaman default nginx. Karena itu header Host: http.badssl.com diberikan eksplisit, dan isinya sama persis (diff mencetak SAMA).
 
+<<<<<<< HEAD
 ![alt text](image-16.png)
 ![alt text](image-17.png)
 ![alt text](image-18.png)
+=======
+![verifikasi soal19](assets/soal19alpha-verifikasi.png)
+>>>>>>> d8c5deb (revisi)
 
 
 ## Soal 20 
@@ -983,8 +1138,18 @@ Tidak ada konfigurasi baru. Autostart dipenuhi karena semua konfigurasi nomor 13
 ## Verifikasi 
 Di GNS3, Stop lalu Start node (NAT dan rootkit dulu, lalu prab dan tedd, backend, abbey dan penny, alpha). Tunggu log [init:...] selesai tanpa mengetik apa pun.
 
+<<<<<<< HEAD
 
 
+=======
+![verifikasi soal20](assets/soal20prab-verifikasi.png)
+![verifikasi soal20](assets/soal20obladi-verifikasi.png)
+![verifikasi soal20](assets/soal20oblada-verifikasipng)
+![verifikasi soal20](assets/soal20abbey-verifikasipng)
+![verifikasi soal20](assets/soal20desmond-verifikasi.png)
+![verifikasi soal20](assets/soal20penny-verifikasi.png)
+![verifikasi soal20](assets/soal20molly-verifikasi.png)
+>>>>>>> d8c5deb (revisi)
 
 
 
